@@ -99,14 +99,51 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+        // Enhanced lighting and shadows
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(20, 40, 20);
+        // Primary directional light (main overhead)
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(30, 50, 30);
         directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.far = 200;
+        directionalLight.shadow.camera.left = -100;
+        directionalLight.shadow.camera.right = 100;
+        directionalLight.shadow.camera.top = 100;
+        directionalLight.shadow.camera.bottom = -100;
+        directionalLight.shadow.bias = -0.001;
         scene.add(directionalLight);
+
+        // Fill light (secondary directional from opposite angle)
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        fillLight.position.set(-40, 35, -40);
+        fillLight.castShadow = true;
+        fillLight.shadow.mapSize.width = 1024;
+        fillLight.shadow.mapSize.height = 1024;
+        fillLight.shadow.camera.far = 150;
+        fillLight.shadow.camera.left = -80;
+        fillLight.shadow.camera.right = 80;
+        fillLight.shadow.camera.top = 80;
+        fillLight.shadow.camera.bottom = -80;
+        scene.add(fillLight);
+
+        // Point lights for accent/interior lighting (simulate fixtures)
+        const pointLight1 = new THREE.PointLight(0xffffff, 0.8, 80);
+        pointLight1.position.set(20, 40, 20);
+        pointLight1.castShadow = true;
+        pointLight1.shadow.mapSize.width = 512;
+        pointLight1.shadow.mapSize.height = 512;
+        scene.add(pointLight1);
+
+        const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 80);
+        pointLight2.position.set(-20, 40, -20);
+        pointLight2.castShadow = true;
+        pointLight2.shadow.mapSize.width = 512;
+        pointLight2.shadow.mapSize.height = 512;
+        scene.add(pointLight2);
 
         // Material palette for consistent coloring
         const materials = {
@@ -118,7 +155,7 @@
             duct: new THREE.MeshStandardMaterial({ color: 0xC0C0C0, roughness: 0.4, metalness: 0.9 }),
             door: new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.6, metalness: 0.2 }),
             window: new THREE.MeshStandardMaterial({ color: 0xb0e0e6, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 }),
-            railing: new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.5 }),
+            railing: new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.1 }),
             accent: new THREE.MeshStandardMaterial({ color: 0x4a90e2, roughness: 0.5, metalness: 0.3 }),
             default: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.2 }),
             catwalk: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.2 })
@@ -224,11 +261,11 @@
 
         // Roof plane
         const roof = new THREE.Mesh(
-            new THREE.PlaneGeometry(820, 820),
+            new THREE.PlaneGeometry(1820, 1820),
             materials.ceiling
         );
         roof.rotation.x = Math.PI / 2;
-        roof.position.y = 720;
+        roof.position.y = 1520;
         roof.receiveShadow = true;
         roof.castShadow = true;
         scene.add(roof);
@@ -285,22 +322,18 @@
                 case 'KeyW':
                 case 'ArrowUp':
                     moveState.forward = true;
-                    console.log('Forward key pressed');
                     break;
                 case 'KeyS':
                 case 'ArrowDown':
                     moveState.backward = true;
-                    console.log('Backward key pressed');
                     break;
                 case 'KeyA':
                 case 'ArrowLeft':
                     moveState.left = true;
-                    console.log('Left key pressed');
                     break;
                 case 'KeyD':
                 case 'ArrowRight':
                     moveState.right = true;
-                    console.log('Right key pressed');
                     break;
             }
         });
@@ -337,7 +370,6 @@
             const intersects = raycaster.intersectObject(model, true);
             if (intersects.length > 0) {
                 const dist = intersects[0].distance;
-                console.log('Collision check - distance to wall:', dist.toFixed(2), 'collision threshold:', collisionDistance);
                 return dist < collisionDistance;
             }
             return false;
