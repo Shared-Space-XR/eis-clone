@@ -71,6 +71,8 @@
     <div id="loading">Loading model...</div>
     <div id="debug">Position: X: 0 Y: 0 Z: 0</div>
 
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/stats.js@r17/build/stats.min.js"></script>
+
     <script type="importmap">
     {
         "imports": {
@@ -100,6 +102,15 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.localClippingEnabled = true;
         document.body.appendChild(renderer.domElement);
+
+        // Initialize stats.js for FPS monitoring
+        const stats = new Stats();
+        stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+        stats.dom.style.position = 'absolute';
+        stats.dom.style.top = '0px';
+        stats.dom.style.right = '0px';
+                stats.dom.style.left = 'auto';
+        document.body.appendChild(stats.dom);
 
         // Add fog for culling far objects
       //  scene.fog = new THREE.Fog(0x222222, 300, 500);
@@ -451,6 +462,9 @@
 
         // Animation loop
         function animate() {
+            stats.begin();
+
+
             requestAnimationFrame(animate);
             updateMovement();
             renderer.render(scene, camera);
@@ -466,6 +480,7 @@
                 console.log('Frame', frameCount, '- Scene objects:', scene.children.length, 'Model loaded:', model !== null);
             }
             frameCount++;
+            stats.end();
         }
 
         let frameCount = 0;
