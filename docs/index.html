@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIS - 3D Gallery</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            max-width: 300px;
+        }
+        #info h2 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        #info p {
+            font-size: 12px;
+            line-height: 1.5;
+            margin-bottom: 5px;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 8px;
+        }
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 100;
+            font-family: monospace;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>EIS - 3D Gallery</h2>
+        <p><strong>Controls:</strong></p>
+        <p>WASD - Move</p>
+        <p>Mouse - Look Around</p>
+        <p>Click to enable controls</p>
+        <p>ESC - Release mouse</p>
+    </div>
+    <div id="loading">Loading model...</div>
+    <div id="debug">Position: X: 0 Y: 0 Z: 0</div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { FBXLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/FBXLoader.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        // Camera (first-person POV)
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.set(0, 38, 10); // Start inside the model
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(20, 40, 20);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // Material palette for consistent coloring
+        const materials = {
+            wall: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.2 }),
+            floor: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.1 }),
+            ceiling: new THREE.MeshStandardMaterial({ color: 0xe4e4e4, roughness: 0.85, metalness: 0.0 }),
+            pillar: new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.7, metalness: 0.1 }),
+            beam: new THREE.MeshStandardMaterial({ color: 0x5C4033, roughness: 0.7, metalness: 0.1 }),
+            duct: new THREE.MeshStandardMaterial({ color: 0xC0C0C0, roughness: 0.4, metalness: 0.9 }),
+            door: new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.6, metalness: 0.2 }),
+            window: new THREE.MeshStandardMaterial({ color: 0xb0e0e6, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 }),
+            railing: new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.5 }),
+            accent: new THREE.MeshStandardMaterial({ color: 0x4a90e2, roughness: 0.5, metalness: 0.3 }),
+            default: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.2 }),
+            catwalk: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.2 })
+        };
+
+        // Function to assign materials based on mesh name
+        function assignMaterial(mesh) {
+            const name = mesh.name.toLowerCase();
+            
+            if (name.includes('wall')) {
+                mesh.material = materials.wall;
+            } else if (name.includes('floor') || name.includes('ground')) {
+                mesh.material = materials.floor;
+            } else if (name.includes('ceiling') || name.includes('roof')) {
+                mesh.material = materials.ceiling;
+            } else if (name.includes('pillar') || name.includes('column')) {
+                mesh.material = materials.pillar;
+            } else if (name.includes('beam') || name.includes('truss')) {
+                mesh.material = materials.beam;
+            } else if (name.includes('duct') || name.includes('pipe')) {
+                mesh.material = materials.duct;
+            } else if (name.includes('door')) {
+                mesh.material = materials.door;
+            } else if (name.includes('window') || name.includes('glass')) {
+                mesh.material = materials.window;
+            } else if (name.includes('railing') || name.includes('rail')) {
+                mesh.material = materials.railing;
+            } else if (name.includes('accent') || name.includes('trim') || name.includes('detail')) {
+                mesh.material = materials.accent;
+            } else {
+                mesh.material = materials.default;
+            }
+        }
+
+        // Load FBX model
+        let model = null;
+        let floorBounds = null;
+        const fbxLoader = new FBXLoader();
+        fbxLoader.load('model/environment.fbx', (fbx) => {
+            model = fbx;
+            let floorMesh = null;
+            
+            fbx.traverse((child) => {
+                if (child.isMesh) {
+                    // Apply consistent materials based on mesh name
+                    assignMaterial(child);
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    
+                    // Find the floor mesh
+                    if (child.name.toLowerCase().includes('floor') || child.name.toLowerCase().includes('ground')) {
+                        floorMesh = child;
+                    }
+                }
+            });
+            
+            // Calculate bounds from floor mesh (X and Z only)
+            if (floorMesh) {
+                if (!floorMesh.geometry.boundingBox) {
+                    floorMesh.geometry.computeBoundingBox();
+                }
+                const bbox = floorMesh.geometry.boundingBox;
+                floorBounds = {
+                    minX: floorMesh.position.x + bbox.min.x,
+                    maxX: floorMesh.position.x + bbox.max.x,
+                    minZ: floorMesh.position.z + bbox.min.z,
+                    maxZ: floorMesh.position.z + bbox.max.z
+                };
+                console.log('✓ Floor bounds calculated:', floorBounds);
+            } else {
+                // Default bounds if no floor found
+                floorBounds = {
+                    minX: -100,
+                    maxX: 100,
+                    minZ: -100,
+                    maxZ: 100
+                };
+                console.log('⚠ No floor mesh found, using default bounds');
+            }
+            
+            scene.add(fbx);
+            console.log('✓ Model loaded successfully');
+            console.log('Model children count:', fbx.children.length);
+            document.getElementById('loading').style.display = 'none';
+        }, 
+        (progress) => {
+            console.log('Loading:', (progress.loaded / progress.total * 100).toFixed(0) + '%');
+        },
+        (error) => {
+            console.error('✗ Error loading model:', error);
+            document.getElementById('loading').textContent = 'Error: model/environment.fbx not found';
+        });
+
+        // Ground plane for reference
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(200, 200),
+            new THREE.MeshStandardMaterial({ color: 0x6d6c6d, roughness: 0.9 })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Roof plane
+        const roof = new THREE.Mesh(
+            new THREE.PlaneGeometry(820, 820),
+            materials.ceiling
+        );
+        roof.rotation.x = Math.PI / 2;
+        roof.position.y = 720;
+        roof.receiveShadow = true;
+        roof.castShadow = true;
+        scene.add(roof);
+
+        // Controls
+        let isLocked = false;
+        let pitch = 0;
+        let yaw = 0;
+
+        const moveState = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false
+        };
+
+        const moveSpeed = 3; 
+        const pointerSpeed = 0.005;
+
+        // Pointer lock
+        document.addEventListener('click', () => {
+            document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            isLocked = !!document.pointerLockElement;
+            document.getElementById('info').style.opacity = isLocked ? '0.3' : '1';
+        });
+
+        // Mouse look
+        document.addEventListener('mousemove', (event) => {
+            if (!isLocked) return;
+
+            yaw -= event.movementX * pointerSpeed;
+            pitch -= event.movementY * pointerSpeed;
+
+            const PI_2 = Math.PI / 2;
+            pitch = Math.max(-PI_2, Math.min(PI_2, pitch));
+
+            const euler = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+            camera.quaternion.setFromEuler(euler);
+        });
+
+        // Keyboard input
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock;
+                document.exitPointerLock();
+                return;
+            }
+
+            switch (e.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    moveState.forward = true;
+                    console.log('Forward key pressed');
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    moveState.backward = true;
+                    console.log('Backward key pressed');
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    moveState.left = true;
+                    console.log('Left key pressed');
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    moveState.right = true;
+                    console.log('Right key pressed');
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    moveState.forward = false;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    moveState.backward = false;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    moveState.left = false;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    moveState.right = false;
+                    break;
+            }
+        });
+
+        // Raycaster for wall collision detection
+        const raycaster = new THREE.Raycaster();
+        const collisionDistance = 5; // Look 5 units ahead for walls
+
+        // Check if there's a wall ahead
+        function checkWallCollision(origin, direction) {
+            if (!model) return false;
+            raycaster.set(origin, direction);
+            const intersects = raycaster.intersectObject(model, true);
+            if (intersects.length > 0) {
+                const dist = intersects[0].distance;
+                console.log('Collision check - distance to wall:', dist.toFixed(2), 'collision threshold:', collisionDistance);
+                return dist < collisionDistance;
+            }
+            return false;
+        }
+
+        // Movement with proper boundary and collision checking
+        function updateMovement() {
+            if (!moveState.forward && !moveState.backward && !moveState.left && !moveState.right) {
+                return; // No movement keys pressed
+            }
+
+            const forward = new THREE.Vector3(
+                -Math.sin(yaw),
+                0,
+                -Math.cos(yaw)
+            ).normalize();
+
+            const right = new THREE.Vector3(
+                Math.sin(yaw + Math.PI / 2),
+                0,
+                Math.cos(yaw + Math.PI / 2)
+            ).normalize();
+
+            // Check collision BEFORE moving - check in each direction separately
+            let canMoveForward = true;
+            let canMoveBackward = true;
+            let canMoveLeft = true;
+            let canMoveRight = true;
+
+            if (moveState.forward) {
+                canMoveForward = !checkWallCollision(camera.position, forward);
+            }
+            if (moveState.backward) {
+                canMoveBackward = !checkWallCollision(camera.position, forward.clone().multiplyScalar(-1));
+            }
+            if (moveState.left) {
+                canMoveLeft = !checkWallCollision(camera.position, right.clone().multiplyScalar(-1));
+            }
+            if (moveState.right) {
+                canMoveRight = !checkWallCollision(camera.position, right);
+            }
+
+            let newPos = camera.position.clone();
+
+            // Only apply movement if collision check passed
+            if (moveState.forward && canMoveForward) {
+                newPos.addScaledVector(forward, moveSpeed);
+            }
+            if (moveState.backward && canMoveBackward) {
+                newPos.addScaledVector(forward, -moveSpeed);
+            }
+            if (moveState.left && canMoveLeft) {
+                newPos.addScaledVector(right, -moveSpeed);
+            }
+            if (moveState.right && canMoveRight) {
+                newPos.addScaledVector(right, moveSpeed);
+            }
+
+            // Check bounds first (X and Z only)
+            if (floorBounds) {
+                const inBounds = newPos.x >= floorBounds.minX && newPos.x <= floorBounds.maxX &&
+                    newPos.z >= floorBounds.minZ && newPos.z <= floorBounds.maxZ;
+                
+                if (!inBounds) {
+                    console.log('OUT OF BOUNDS - blocked at:', newPos);
+                    return; // Don't move if out of bounds
+                }
+            }
+
+            // All checks passed, move the camera
+            camera.position.copy(newPos);
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMovement();
+            renderer.render(scene, camera);
+            
+            // Update debug display with camera position
+            document.getElementById('debug').textContent = 
+                `Position: X: ${camera.position.x.toFixed(2)} Y: ${camera.position.y.toFixed(2)} Z: ${camera.position.z.toFixed(2)}`;
+            
+            // Debug: show scene info on first few frames
+            if (frameCount < 3) {
+                console.log('Frame', frameCount, '- Scene objects:', scene.children.length, 'Model loaded:', model !== null);
+            }
+            frameCount++;
+        }
+
+        let frameCount = 0;
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
