@@ -95,13 +95,11 @@
         // Camera (first-person POV)
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
         camera.position.set(0, 38, 10); // Start inside the model
+        scene.add(camera);
 
-        // Create a camera group to handle VR positioning
-        const cameraGroup = new THREE.Group();
-        cameraGroup.add(camera);
-        scene.add(cameraGroup);
-
-        // Renderer with optimizations and XR support
+        // Offset group for VR scene positioning
+        const sceneOffsetGroup = new THREE.Group();
+        scene.add(sceneOffsetGroup);
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', xrCompatible: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Cap pixel ratio for performance
@@ -114,14 +112,18 @@
         // Add VR Button
         document.body.appendChild(VRButton.createButton(renderer));
 
-        // Lock camera Y position at 38 for VR
+        // Initialize VR with proper starting position
         renderer.xr.addEventListener('sessionstart', () => {
-            cameraGroup.position.y = 38;
+            camera.position.x = 0;
+            camera.position.z = 10;
+            // Offset scene DOWN by 1.3 so camera at 1.7 appears at eye level 3.0 relative to scene
+            sceneOffsetGroup.position.y = -1.3;
         });
 
         // VR Controller movement tracking
         const vrMovement = { forward: 0, strafe: 0 };
-        const vrSpeed = 5; // VR movement speed per frame
+        const vrSpeed = 0.05; // VR movement speed per frame
+        let vrInitialHeadsetY = null; // Record initial headset Y from XR on first frame
 
         // Initialize stats.js for FPS monitoring
         const stats = new Stats();
@@ -256,7 +258,9 @@
                     minZ: floorMesh.position.z + bbox.min.z,
                     maxZ: floorMesh.position.z + bbox.max.z
                 };
+                const floorY = floorMesh.position.y + bbox.max.y;
                 console.log('✓ Floor bounds calculated:', floorBounds);
+                console.log('✓ Floor mesh Y position:', floorMesh.position.y, '| Floor top Y:', floorY, '| Floor bbox:', bbox);
             } else {
                 // Default bounds if no floor found
                 floorBounds = {
@@ -268,7 +272,7 @@
                 console.log('⚠ No floor mesh found, using default bounds');
             }
             
-            scene.add(fbx);
+            sceneOffsetGroup.add(fbx);
             console.log('✓ Model loaded successfully');
             console.log('Model children count:', fbx.children.length);
             document.getElementById('loading').style.display = 'none';
@@ -289,7 +293,7 @@
         ground.rotation.x = -Math.PI / 2;
         ground.position.y = 0;
         ground.receiveShadow = true;
-        scene.add(ground);
+        sceneOffsetGroup.add(ground);
 
         // Roof plane
         const roof = new THREE.Mesh(
@@ -300,7 +304,7 @@
         roof.position.y = 1520;
         roof.receiveShadow = true;
         roof.castShadow = true;
-        scene.add(roof);
+        sceneOffsetGroup.add(roof);
 
         // Controls
         let isLocked = false;
@@ -485,6 +489,11 @@
             stats.begin();
             
             if (renderer.xr.isPresenting) {
+                // VR mode: scene is offset, camera tracks naturally
+                if (frameCount < 5) {
+                    console.log(`Frame ${frameCount}: VR mode, scene offset = ${sceneOffsetGroup.position.y.toFixed(3)}`);
+                }
+                
                 // VR mode: query current controller input each frame
                 const session = renderer.xr.getSession();
                 if (session) {
@@ -501,7 +510,7 @@
                     });
                 }
                 
-                // Apply VR controller movement (thumbstick locomotion)
+                // Apply VR controller movement (thumbstick locomotion) on top of headset tracking
                 const vrDirection = new THREE.Vector3();
                 vrDirection.x = vrMovement.strafe;
                 vrDirection.z = vrMovement.forward;
@@ -523,17 +532,11 @@
                         .addScaledVector(forward, vrDirection.z)
                         .addScaledVector(right, vrDirection.x);
                     
-                    cameraGroup.position.add(moveVector);
+                    camera.position.add(moveVector);
                 }
-                
-                // Keep cameraGroup Y at a comfortable base level to preserve headset tracking
-                // Allow natural headset up/down movement
-                const minY = 25;
-                const maxY = 45;
-                if (cameraGroup.position.y < minY) cameraGroup.position.y = minY;
-                if (cameraGroup.position.y > maxY) cameraGroup.position.y = maxY;
             } else {
-                // Desktop mode: use keyboard movement
+                // Desktop mode: reset scene offset
+                sceneOffsetGroup.position.y = 0;
                 updateMovement();
             }
             
