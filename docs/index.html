@@ -9,6 +9,7 @@
             margin: 0;
             overflow: hidden;
             font-family: Arial, sans-serif;
+            background-color: black;
         }
         canvas {
             display: block;
@@ -85,6 +86,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { FBXLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/FBXLoader.js';
+        import { VRButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js';
 
         // Scene setup
         const scene = new THREE.Scene();
@@ -94,14 +96,18 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
         camera.position.set(0, 38, 10); // Start inside the model
 
-        // Renderer with optimizations
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        // Renderer with optimizations and XR support
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', xrCompatible: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Cap pixel ratio for performance
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.localClippingEnabled = true;
+        renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
+
+        // Add VR Button
+        document.body.appendChild(VRButton.createButton(renderer));
 
         // Initialize stats.js for FPS monitoring
         const stats = new Stats();
@@ -460,12 +466,9 @@
             camera.position.copy(newPos);
         }
 
-        // Animation loop
+        // Animation loop with XR support
         function animate() {
             stats.begin();
-
-
-            requestAnimationFrame(animate);
             updateMovement();
             renderer.render(scene, camera);
             
@@ -492,7 +495,8 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        animate();
+        // Use setAnimationLoop for XR compatibility
+        renderer.setAnimationLoop(animate);
     </script>
 </body>
 </html>
