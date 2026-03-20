@@ -119,6 +119,10 @@
             cameraGroup.position.y = 38;
         });
 
+        // VR Controller movement tracking
+        const vrMovement = { forward: 0, strafe: 0 };
+        const vrSpeed = 0.05; // VR movement speed per frame
+
         // Initialize stats.js for FPS monitoring
         const stats = new Stats();
         stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
@@ -479,14 +483,60 @@
         // Animation loop with XR support
         function animate() {
             stats.begin();
-            updateMovement();
             
-            // In VR mode, lock the camera group Y position at 38
             if (renderer.xr.isPresenting) {
-                cameraGroup.position.y = 38;
-                // Allow XR to control X and Z, but lock Y
-                const xrCameraposY = cameraGroup.position.y;
-                cameraGroup.position.y = 38;
+                // VR mode: query current controller input each frame
+                const session = renderer.xr.getSession();
+                if (session) {
+                    const inputSources = Array.from(session.inputSources);
+                    vrMovement.forward = 0;
+                    vrMovement.strafe = 0;
+                    
+                    inputSources.forEach((source) => {
+                        if (source.gamepad && source.gamepad.axes.length >= 2) {
+                            // Use first available controller/hand with gamepad
+                            vrMovement.strafe = source.gamepad.axes[0];
+                            vrMovement.forward = -source.gamepad.axes[1];
+                        }
+                    });
+                }
+                
+                // Apply VR controller movement
+                const vrDirection = new THREE.Vector3();
+                vrDirection.x = vrMovement.strafe;
+                vrDirection.z = vrMovement.forward;
+                
+                if (vrDirection.length() > 0.1) { // Deadzone
+                    vrDirection.normalize();
+                    vrDirection.multiplyScalar(vrSpeed);
+                    
+                    // Apply movement relative to camera orientation
+                    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraGroup.quaternion);
+                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraGroup.quaternion);
+                    
+                    forward.y = 0;
+                    right.y = 0;
+                    forward.normalize();
+                    right.normalize();
+                    
+                    const moveVector = new THREE.Vector3()
+                        .addScaledVector(forward, vrDirection.z)
+                        .addScaledVector(right, vrDirection.x);
+                    
+                    cameraGroup.position.add(moveVector);
+                }
+                
+                // Only clamp Y to prevent falling through floor/above ceiling
+                // Allow XR headset movement in X and Z
+                const cameraWorldY = cameraGroup.position.y + camera.position.y;
+                if (cameraWorldY < 20) {
+                    cameraGroup.position.y = 20 - camera.position.y;
+                } else if (cameraWorldY > 49) {
+                    cameraGroup.position.y = 49 - camera.position.y;
+                }
+            } else {
+                // Desktop mode: use keyboard movement
+                updateMovement();
             }
             
             renderer.render(scene, camera);
