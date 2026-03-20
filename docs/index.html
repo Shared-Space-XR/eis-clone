@@ -92,15 +92,19 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
         camera.position.set(0, 38, 10); // Start inside the model
 
-        // Renderer
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        // Renderer with optimizations
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Cap pixel ratio for performance
         renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.localClippingEnabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // Enhanced lighting and shadows
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        // Add fog for culling far objects
+      //  scene.fog = new THREE.Fog(0x222222, 300, 500);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
 
         // Primary directional light (main overhead)
@@ -130,35 +134,22 @@
         fillLight.shadow.camera.bottom = -80;
         scene.add(fillLight);
 
-        // Point lights for accent/interior lighting (simulate fixtures)
-        const pointLight1 = new THREE.PointLight(0xffffff, 0.8, 80);
-        pointLight1.position.set(20, 40, 20);
-        pointLight1.castShadow = true;
-        pointLight1.shadow.mapSize.width = 512;
-        pointLight1.shadow.mapSize.height = 512;
-        scene.add(pointLight1);
 
-        const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 80);
-        pointLight2.position.set(-20, 40, -20);
-        pointLight2.castShadow = true;
-        pointLight2.shadow.mapSize.width = 512;
-        pointLight2.shadow.mapSize.height = 512;
-        scene.add(pointLight2);
 
         // Material palette for consistent coloring
         const materials = {
-            wall: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.2 }),
-            floor: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.1 }),
+            wall: new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.95, metalness: 0.0 }),
+            floor: new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.92, metalness: 0.05 }),
             ceiling: new THREE.MeshStandardMaterial({ color: 0xe4e4e4, roughness: 0.85, metalness: 0.0 }),
             pillar: new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.7, metalness: 0.1 }),
             beam: new THREE.MeshStandardMaterial({ color: 0x5C4033, roughness: 0.7, metalness: 0.1 }),
             duct: new THREE.MeshStandardMaterial({ color: 0xC0C0C0, roughness: 0.4, metalness: 0.9 }),
             door: new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.6, metalness: 0.2 }),
             window: new THREE.MeshStandardMaterial({ color: 0xb0e0e6, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 }),
-            railing: new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.1 }),
+            railing: new THREE.MeshStandardMaterial({ color: 0x606060, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.0 }),
             accent: new THREE.MeshStandardMaterial({ color: 0x4a90e2, roughness: 0.5, metalness: 0.3 }),
             default: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.2 }),
-            catwalk: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.2 })
+            catwalk: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.5, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
         };
 
         // Function to assign materials based on mesh name
@@ -204,6 +195,16 @@
                     assignMaterial(child);
                     child.castShadow = true;
                     child.receiveShadow = true;
+                    
+                    // Add border edges to catwalk meshes
+                    if (child.name.toLowerCase().includes('catwalk')) {
+                        const edges = new THREE.EdgesGeometry(child.geometry);
+                        const line = new THREE.LineSegments(
+                            edges,
+                            new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 2 })
+                        );
+                        child.add(line);
+                    }
                     
                     // Find the floor mesh
                     if (child.name.toLowerCase().includes('floor') || child.name.toLowerCase().includes('ground')) {
@@ -362,6 +363,7 @@
         // Raycaster for wall collision detection
         const raycaster = new THREE.Raycaster();
         const collisionDistance = 5; // Look 5 units ahead for walls
+        let lastCollisionLog = 0;
 
         // Check if there's a wall ahead
         function checkWallCollision(origin, direction) {
@@ -370,6 +372,10 @@
             const intersects = raycaster.intersectObject(model, true);
             if (intersects.length > 0) {
                 const dist = intersects[0].distance;
+                // Log collision only occasionally to reduce console spam
+                if (performance.now() - lastCollisionLog > 500) {
+                    lastCollisionLog = performance.now();
+                }
                 return dist < collisionDistance;
             }
             return false;
@@ -449,9 +455,11 @@
             updateMovement();
             renderer.render(scene, camera);
             
-            // Update debug display with camera position
-            document.getElementById('debug').textContent = 
-                `Position: X: ${camera.position.x.toFixed(2)} Y: ${camera.position.y.toFixed(2)} Z: ${camera.position.z.toFixed(2)}`;
+            // Update debug display only every 5 frames to reduce DOM thrashing
+            if (frameCount % 5 === 0) {
+                document.getElementById('debug').textContent = 
+                    `Position: X: ${camera.position.x.toFixed(2)} Y: ${camera.position.y.toFixed(2)} Z: ${camera.position.z.toFixed(2)}`;
+            }
             
             // Debug: show scene info on first few frames
             if (frameCount < 3) {
