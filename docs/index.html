@@ -96,6 +96,11 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
         camera.position.set(0, 38, 10); // Start inside the model
 
+        // Create a camera group to handle VR positioning
+        const cameraGroup = new THREE.Group();
+        cameraGroup.add(camera);
+        scene.add(cameraGroup);
+
         // Renderer with optimizations and XR support
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', xrCompatible: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -108,6 +113,11 @@
 
         // Add VR Button
         document.body.appendChild(VRButton.createButton(renderer));
+
+        // Lock camera Y position at 38 for VR
+        renderer.xr.addEventListener('sessionstart', () => {
+            cameraGroup.position.y = 38;
+        });
 
         // Initialize stats.js for FPS monitoring
         const stats = new Stats();
@@ -470,6 +480,15 @@
         function animate() {
             stats.begin();
             updateMovement();
+            
+            // In VR mode, lock the camera group Y position at 38
+            if (renderer.xr.isPresenting) {
+                cameraGroup.position.y = 38;
+                // Allow XR to control X and Z, but lock Y
+                const xrCameraposY = cameraGroup.position.y;
+                cameraGroup.position.y = 38;
+            }
+            
             renderer.render(scene, camera);
             
             // Update debug display only every 5 frames to reduce DOM thrashing
