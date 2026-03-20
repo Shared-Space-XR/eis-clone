@@ -121,7 +121,7 @@
 
         // VR Controller movement tracking
         const vrMovement = { forward: 0, strafe: 0 };
-        const vrSpeed = 0.05; // VR movement speed per frame
+        const vrSpeed = 5; // VR movement speed per frame
 
         // Initialize stats.js for FPS monitoring
         const stats = new Stats();
@@ -501,7 +501,7 @@
                     });
                 }
                 
-                // Apply VR controller movement
+                // Apply VR controller movement (thumbstick locomotion)
                 const vrDirection = new THREE.Vector3();
                 vrDirection.x = vrMovement.strafe;
                 vrDirection.z = vrMovement.forward;
@@ -511,8 +511,8 @@
                     vrDirection.multiplyScalar(vrSpeed);
                     
                     // Apply movement relative to camera orientation
-                    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraGroup.quaternion);
-                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraGroup.quaternion);
+                    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
                     
                     forward.y = 0;
                     right.y = 0;
@@ -526,14 +526,12 @@
                     cameraGroup.position.add(moveVector);
                 }
                 
-                // Only clamp Y to prevent falling through floor/above ceiling
-                // Allow XR headset movement in X and Z
-                const cameraWorldY = cameraGroup.position.y + camera.position.y;
-                if (cameraWorldY < 20) {
-                    cameraGroup.position.y = 20 - camera.position.y;
-                } else if (cameraWorldY > 49) {
-                    cameraGroup.position.y = 49 - camera.position.y;
-                }
+                // Keep cameraGroup Y at a comfortable base level to preserve headset tracking
+                // Allow natural headset up/down movement
+                const minY = 25;
+                const maxY = 45;
+                if (cameraGroup.position.y < minY) cameraGroup.position.y = minY;
+                if (cameraGroup.position.y > maxY) cameraGroup.position.y = maxY;
             } else {
                 // Desktop mode: use keyboard movement
                 updateMovement();
